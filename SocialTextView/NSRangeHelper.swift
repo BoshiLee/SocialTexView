@@ -6,10 +6,13 @@
 //  Copyright © 2018 Boshi Li. All rights reserved.
 //
 
-import CoreText
 import Foundation
 
 extension String {
+    
+    var nsString: NSString {
+        return self as NSString
+    }
     
     func nsRange(from range: Range<String.Index>) -> NSRange {
         return NSRange(range, in: self)

@@ -10,7 +10,7 @@ import UIKit
 
 protocol MentionsPresentable: AnyObject {
     func didGetMentions()
-    func didSelectedMention(_ mention: MentionUser)
+    func didSelectedMention(_ mention: MentionedUser)
 }
 
 class MentionsViewModel: NSObject {
@@ -52,7 +52,7 @@ extension MentionsViewModel: UITableViewDataSource, UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         let cellVM = self.cellViewModels[indexPath.row]
-        let metion = MentionUser(
+        let metion = MentionedUser(
             account: cellVM.id,
             nickName: cellVM.nickName,
             shouldActiveInt: 1

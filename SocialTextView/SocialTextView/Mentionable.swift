@@ -9,7 +9,7 @@
 import UIKit
 
 protocol MentionWindowDelegate: AnyObject {
-    func didSelectedMention(_ mention: MentionUser)
+    func didSelectedMention(_ mention: MentionedUser)
 }
 
 class MentionWindow: UIWindow {
@@ -44,7 +44,7 @@ class MentionWindow: UIWindow {
 }
 
 extension MentionWindow: MentionsPresentable {
-    func didSelectedMention(_ mention: MentionUser) {
+    func didSelectedMention(_ mention: MentionedUser) {
         self.delegate?.didSelectedMention(mention)
     }
     

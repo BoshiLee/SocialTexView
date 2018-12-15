@@ -43,7 +43,12 @@ extension MentionCandidate {
     }
 }
 
-struct MentionUser: Codable {
+struct SCMentionRange {
+    var nickNameRange: NSRange
+    let mentionUser: MentionedUser
+}
+
+struct MentionedUser: Codable {
     let account: String
     let nickName: String
     let shouldActiveInt: Int
@@ -55,7 +60,7 @@ struct MentionUser: Codable {
     }
 }
 
-extension MentionUser {
+extension MentionedUser {
     var shouldActive: Bool { return self.shouldActiveInt == 1}
 }
 
@@ -66,4 +71,4 @@ struct SocialElement {
 }
 
 /// key = id, value: MentionUser
-typealias MentionDict = [String: MentionUser]
+typealias MentionDict = [String: MentionedUser]
