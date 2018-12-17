@@ -142,6 +142,8 @@ class SocialTextView: UITextView {
         }
     }
     
+    private let impactFeedBackGenerator = UIImpactFeedbackGenerator()
+    
     private var placeholderColor: UIColor { return #colorLiteral(red: 0.6705882353, green: 0.6705882353, blue: 0.6705882353, alpha: 1) }
     
     /// The UITextView placeholder text
@@ -193,30 +195,31 @@ extension SocialTextView: UITextViewDelegate {
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         let char = text.cString(using: String.Encoding.utf8)!
         let typingChar = strcmp(char, "\\b")
-
+        let isInserting = typingChar == -92 ? false : true
         if (typingChar == -92) { // 刪除
-            
+//            self.removeTextHandler(range, isInserting: false)
         } else if (typingChar == -82) { // 換行
             self.dismissPopover()
             self.lastMentionRange = nil
 
         }
-        self.inputTextHandler(range)
+        self.inputTextHandler(range, replaceText: text, isInserting: isInserting)
         return true
     }
     
-    func inputTextHandler(_ typingRange: NSRange) {
+    func inputTextHandler(_ typingRange: NSRange, replaceText: String, isInserting: Bool) {
         for (i, uiMention) in self.uiMentionRanges.enumerated() {
             guard let positionType = self.getCusorPosistionType(typingRange, Index: i, mentionRange: uiMention.nickNameRange) else { continue }
+            let length = isInserting ? replaceText.nsString.length : typingRange.length
             switch positionType {
-            case .leadingMentions(let length):
-                self.resetMentionLoacation(fromIndex: -1, withLength: length)
-            case .inTheMention(let mentionIndex, let length):
-                self.resetMentionLoacation(fromIndex: mentionIndex, withLength: length)
+            case .leadingMentions:
+                self.resetMentionLoacations(fromIndex: -1, withLength: length, isInserting: isInserting)
+            case .inTheMention(let mentionIndex, _):
+                self.resetMentionLoacations(fromIndex: mentionIndex, withLength: length, isInserting: isInserting)
                 self.uiMentionRanges.remove(at: mentionIndex)
                 self.removeCandiateFromCache(atIndex: mentionIndex)
-            case .betweenMention(let firstIndex, _, let length):
-                self.resetMentionLoacation(fromIndex: firstIndex, withLength: length)
+            case .betweenMention(let firstIndex, _, _):
+                self.resetMentionLoacations(fromIndex: firstIndex, withLength: length, isInserting: isInserting)
             case .trallingMentions:
                 break
             }
@@ -224,20 +227,23 @@ extension SocialTextView: UITextViewDelegate {
         print(self.uiMentionRanges)
     }
     
-    
-    func resetMentionLoacation(fromIndex index: Int, withLength length: Int) {
-        if index == -1 {
+    func resetMentionLoacations(fromIndex index: Int, withLength length: Int, isInserting: Bool) {
+        if index == -1, !self.uiMentionRanges.isEmpty {
             for i in 0..<self.uiMentionRanges.count {
-                self.uiMentionRanges[i].nickNameRange.location = self.uiMentionRanges[i].nickNameRange.location - length >= 0 ?
-                    self.uiMentionRanges[i].nickNameRange.location - length : 0
+                self.resetMentionLocation(atIndex: i, withLength: length, isInserting: isInserting)
             }
             return
         }
         guard self.uiMentionRanges.indices.contains(index) else { return }
         for i in 0..<self.uiMentionRanges.count where i > index  {
-            self.uiMentionRanges[i].nickNameRange.location = self.uiMentionRanges[i].nickNameRange.location - length >= 0 ?
-                self.uiMentionRanges[i].nickNameRange.location - length : 0
+            self.resetMentionLocation(atIndex: i, withLength: length, isInserting: isInserting)
         }
+    }
+    
+    func resetMentionLocation(atIndex i: Int, withLength length: Int, isInserting: Bool) {
+        let offsetLength = isInserting ? length : -length
+        self.uiMentionRanges[i].nickNameRange.location = self.uiMentionRanges[i].nickNameRange.location + offsetLength >= 0 ?
+            self.uiMentionRanges[i].nickNameRange.location + offsetLength : 0
     }
     
     func removeCandiateFromCache(atIndex mentionIndex: Int) {
@@ -374,6 +380,7 @@ extension SocialTextView: MentionWindowDelegate {
         self.dismissPopover()
         self.createNewMentionRange(mention)
         self.lastMentionRange = nil
+        self.impactFeedBackGenerator.impactOccurred()
         self.updateTextAttributed()
         print(self.uiMentionRanges.count)
     }
