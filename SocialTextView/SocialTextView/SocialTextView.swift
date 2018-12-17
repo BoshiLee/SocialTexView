@@ -9,10 +9,10 @@
 import UIKit
 
 enum TypingPosisition {
-    case leadingMentions
-    case inTheMention(mentionIndex: Int)
-    case betweenMention(firstIndex: Int, secondIndex: Int, offset: Int)
-    case trallingMentions(lastMentionIndex: Int, offset: Int)
+    case leadingMentions(length: Int)
+    case inTheMention(mentionIndex: Int, length: Int)
+    case betweenMention(firstIndex: Int, secondIndex: Int, length: Int)
+    case trallingMentions
 }
 
 typealias SCPostingContent = (content: String, mentionDict: MentionDict)
@@ -91,7 +91,7 @@ class SocialTextView: UITextView {
     private lazy var mentionDict: MentionDict = MentionDict()
     private var selectedElement: SocialElement?
     private var typingMarkedRanges: NSRange?
-    private lazy var uiMentionRanges = [SCMentionRange]()
+    private lazy var uiMentionRanges = [SCTVMentionRange]()
     
     // MARK: - Popover related properties
     private var isPopoverPresenting: Bool = false
@@ -195,30 +195,48 @@ extension SocialTextView: UITextViewDelegate {
         let typingChar = strcmp(char, "\\b")
 
         if (typingChar == -92) { // 刪除
-            self.removeMentionRangeHandler(isInserting: false)
+            
         } else if (typingChar == -82) { // 換行
             self.dismissPopover()
             self.lastMentionRange = nil
 
         }
+        self.inputTextHandler(range)
         return true
     }
     
-    func removeMentionRangeHandler(isInserting: Bool) {
-        if let index = self.getIndexOfCusorInMentionRange(isInserting: isInserting) {
-            self.uiMentionRanges.remove(at: index)
-            self.resetMentionLoacation(fromIndex: index)
-            self.removeCandiateFromCache(atIndex: index)
-            
+    func inputTextHandler(_ typingRange: NSRange) {
+        for (i, uiMention) in self.uiMentionRanges.enumerated() {
+            guard let positionType = self.getCusorPosistionType(typingRange, Index: i, mentionRange: uiMention.nickNameRange) else { continue }
+            switch positionType {
+            case .leadingMentions(let length):
+                self.resetMentionLoacation(fromIndex: -1, withLength: length)
+            case .inTheMention(let mentionIndex, let length):
+                self.resetMentionLoacation(fromIndex: mentionIndex, withLength: length)
+                self.uiMentionRanges.remove(at: mentionIndex)
+                self.removeCandiateFromCache(atIndex: mentionIndex)
+            case .betweenMention(let firstIndex, _, let length):
+                self.resetMentionLoacation(fromIndex: firstIndex, withLength: length)
+            case .trallingMentions:
+                break
+            }
         }
+        print(self.uiMentionRanges)
     }
     
-    func resetMentionLoacation(fromIndex index: Int) {
+    
+    func resetMentionLoacation(fromIndex index: Int, withLength length: Int) {
+        if index == -1 {
+            for i in 0..<self.uiMentionRanges.count {
+                self.uiMentionRanges[i].nickNameRange.location = self.uiMentionRanges[i].nickNameRange.location - length >= 0 ?
+                    self.uiMentionRanges[i].nickNameRange.location - length : 0
+            }
+            return
+        }
         guard self.uiMentionRanges.indices.contains(index) else { return }
-        let location = self.uiMentionRanges[index].nickNameRange.length
         for i in 0..<self.uiMentionRanges.count where i > index  {
-            self.uiMentionRanges[i].nickNameRange.length = self.uiMentionRanges[i].nickNameRange.length - location >= 0 ?
-                self.uiMentionRanges[i].nickNameRange.length - location : 0
+            self.uiMentionRanges[i].nickNameRange.location = self.uiMentionRanges[i].nickNameRange.location - length >= 0 ?
+                self.uiMentionRanges[i].nickNameRange.location - length : 0
         }
     }
     
@@ -235,12 +253,12 @@ extension SocialTextView: UITextViewDelegate {
             placeholderLabel.isHidden = self.text.count > 0
         }
         
-        var selectedRange = self.selectedRange
+//        var selectedRange = self.selectedRange
         
-        self.typingMarkedRanges = nil
-        self.updateTextAttributed()
-        selectedRange.length = 0
-        self.selectedRange = selectedRange
+//        self.typingMarkedRanges = nil
+//        self.updateTextAttributed()
+//        selectedRange.length = 0
+//        self.selectedRange = selectedRange
         self.popoverHandler()
         self.scDelegate?.textViewDidChange(self)
     }
@@ -249,14 +267,27 @@ extension SocialTextView: UITextViewDelegate {
 // MARK: - Cusor Position Handler
 extension SocialTextView {
     
-    func getIndexOfCusorInMentionRange(isInserting: Bool) -> Int? {
-        return self.cacheMentionRanges.index(where: { [unowned self] in
-            var cusorPosition = self.getCursorPosition()
-            if isInserting {
-                cusorPosition = cusorPosition - 1 >= 0 ? cusorPosition : 0
-            }
-            return cusorPosition >= $0.location && cusorPosition < $0.upperBound
+    func getIndexOfCusorInMentionRange(_ range: NSRange) -> Int? {
+        return self.cacheMentionRanges.index(where: {
+            return range.location >= $0.location && range.location < $0.upperBound
         })
+    }
+    
+    private func getCusorPosistionType(_ typingRange: NSRange, Index i: Int, mentionRange: NSRange) -> TypingPosisition? {
+        let cusorLocation = typingRange.location
+        if (cusorLocation > mentionRange.lowerBound && cusorLocation < mentionRange.upperBound) { // 判斷是否在當下的 range 裡
+            return .inTheMention(mentionIndex: i, length: typingRange.length)
+        } else if i == 0, cusorLocation <= mentionRange.lowerBound{ // 判斷是否在第一個 range 前面
+            return .leadingMentions(length: typingRange.length)
+        } else if self.cacheMentionRanges.indices.contains(i + 1) {
+            if (cusorLocation >= mentionRange.upperBound && cusorLocation < self.cacheMentionRanges[i + 1].lowerBound) {
+                return .betweenMention(firstIndex: i, secondIndex: i + 1, length: typingRange.length)
+            } else {
+                return nil
+            }
+        } else { // 後面無 range
+            return .trallingMentions
+        }
     }
     
 }
@@ -344,6 +375,7 @@ extension SocialTextView: MentionWindowDelegate {
         self.createNewMentionRange(mention)
         self.lastMentionRange = nil
         self.updateTextAttributed()
+        print(self.uiMentionRanges.count)
     }
     
     private func createNewMentionRange(_ mention: MentionedUser) {
@@ -352,7 +384,7 @@ extension SocialTextView: MentionWindowDelegate {
         guard let lastMentionRange = self.lastMentionRange else { return }
         let mentionString = "@\(mention.nickName)"
         self.text = self.text.nsString.replacingCharacters(in: lastMentionRange, with: mentionString) as String
-        let mentionRange = SCMentionRange(nickNameRange: NSRange(location: lastMentionRange.location, length: mentionString.nsString.length), mentionUser: mention)
+        let mentionRange = SCTVMentionRange(nickNameRange: NSRange(location: lastMentionRange.location, length: mentionString.nsString.length), mentionUser: mention)
         self.uiMentionRanges.append(mentionRange)
     }
     

@@ -43,7 +43,7 @@ extension MentionCandidate {
     }
 }
 
-struct SCMentionRange {
+struct SCTVMentionRange {
     var nickNameRange: NSRange
     let mentionUser: MentionedUser
 }

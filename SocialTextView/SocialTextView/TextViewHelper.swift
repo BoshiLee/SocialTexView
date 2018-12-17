@@ -38,22 +38,30 @@ extension SocialTextView {
     }
     
     func getCurrentTypingLocation() -> Int {
-        return getCursorPosition() - 1 < 0 ? 0 : getCursorPosition() - 1
+        return self.selectedRange.location - 1 < 0 ? 0 : self.selectedRange.location - 1
     }
     
     func getCurrentTypingCharacter() -> String? {
-        guard let current = text.character(at: self.getCurrentTypingLocation() ) else { return nil }
-        return String(current)
+        let nsText = text as NSString
+        let newLocation = self.selectedRange.location - 1 < 0 ? 0 : self.selectedRange.location - 1
+        let newRange = NSRange(location: newLocation, length: 1)
+        guard nsText.length >= newRange.length else { return nil }
+        return nsText.substring(with: newRange)
     }
     
     func isCurrentTyping(is string: String) -> Bool {
-        guard let current = self.getCurrentTypingCharacter(), current == string else { return false }
-        return true
+        return self.getCurrentTypingCharacter() == string
     }
     
     func isTypingChineseAlpahbet() -> Bool {
         ///取得當前TextField選取的文字區域
-        return self.markedTextRange != nil
+        if let positionRange = self.markedTextRange {
+            if let _ = self.position(from: positionRange.start, offset: 0) {
+                return true
+            } else { return false }
+        } else {
+            return false
+        }
     }
     
     var markedTypingRange: NSRange? {
@@ -74,6 +82,6 @@ extension SocialTextView {
             return nil
         }
     }
-
+    
 }
 
