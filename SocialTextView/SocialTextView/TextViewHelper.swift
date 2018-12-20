@@ -9,6 +9,7 @@
 import UIKit
 
 extension SocialTextView {
+    
     var startPosition: UITextPosition {
         return self.beginningOfDocument
     }
@@ -83,5 +84,44 @@ extension SocialTextView {
         }
     }
     
+    var postingText: String {
+        var prsentingText = self.text!
+        var uiMentionRanges = self.uiMentionRanges
+        while !uiMentionRanges.isEmpty {
+            let content = self.popUpFirstMention(form: uiMentionRanges, presentingText: prsentingText)
+            prsentingText = content.prsentingText
+            uiMentionRanges = content.ranges
+        }
+        return prsentingText
+    }
+    
+    // MARK: - Origin Text Handlers
+    private func tagUserString(formRange range: SCTVMentionRange) -> String {
+        return "<tagUser>@\(range.mentionUser.account)</tagUser>"
+    }
+    
+    private func popUpFirstMention(form ranges: [SCTVMentionRange], presentingText: String) -> (prsentingText: String, ranges: [SCTVMentionRange]) {
+        var uiMentionRanges = ranges
+        var prsentingText = presentingText
+        guard let firstMenstion = uiMentionRanges.first else { return (presentingText, ranges) }
+        let firstTagUserString = self.tagUserString(formRange: firstMenstion)
+        uiMentionRanges.removeFirst()
+        
+        for (i, uiMentionRange) in uiMentionRanges.enumerated() {
+            let newRangelocation = uiMentionRange.nickNameRange.location - firstMenstion.nickNameRange.length + firstTagUserString.nsString.length
+            uiMentionRanges[i].nickNameRange.location = newRangelocation
+        }
+        
+        prsentingText.replaceSubrange(firstMenstion.nickNameRange, withReplacementText: self.tagUserString(formRange: firstMenstion))
+        return (prsentingText, uiMentionRanges)
+    }
+    
+    func setText(fromOriginText originText: inout String, mentionDict: MentionDict) -> [SCTVMentionRange] {
+        let elements = ElementBuilder.relpaceMentions(form: &originText, with: mentionDict)
+        return elements.compactMap {
+            guard let mentionUser = mentionDict[$0.content], mentionUser.shouldActive else { return nil }
+            return SCTVMentionRange(nickNameRange: $0.range, mentionUser: mentionUser)
+        }
+    }
 }
 
